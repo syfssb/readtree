@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { useTheme } from 'next-themes';
+import { useTheme } from '@/providers/theme-provider';
 import { Sun, Moon, Settings } from 'lucide-react';
 import { cn } from '@/lib/utils/cn';
 
