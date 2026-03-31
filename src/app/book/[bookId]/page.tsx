@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { use } from 'react';
-import { RefreshCw, CheckCircle, AlertCircle } from 'lucide-react';
+import { RefreshCw, CheckCircle, AlertCircle, Download } from 'lucide-react';
 import { Header } from '@/components/layout/header';
 import { Sidebar } from '@/components/layout/sidebar';
 import { ContentPanel } from '@/components/layout/content-panel';
@@ -24,7 +24,7 @@ interface BookPageProps {
 export default function BookPage({ params }: BookPageProps) {
   const { bookId } = use(params);
   const { book, chapters, isLoading, error } = useBook(bookId);
-  const { syncStatus, triggerSync } = useSync(bookId);
+  const { syncStatus, triggerSync, errorMessage } = useSync(bookId);
   const [selectedChapterId, setSelectedChapterId] = useState<string | null>(null);
 
   const syncLabel = {
@@ -74,6 +74,22 @@ export default function BookPage({ params }: BookPageProps) {
               />
             )}
             {syncLabel}
+          </Button>
+
+          {/* 同步失败时显示具体错误信息 */}
+          {syncStatus === 'error' && errorMessage && (
+            <p className="font-sans text-xs text-red-500 mt-1 px-1">{errorMessage}</p>
+          )}
+
+          {/* 导出 Markdown 按钮 */}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => window.open(`/api/books/${bookId}/export`)}
+            className="w-full justify-start gap-2 text-xs mt-1"
+          >
+            <Download size={13} />
+            导出 Markdown
           </Button>
         </div>
 

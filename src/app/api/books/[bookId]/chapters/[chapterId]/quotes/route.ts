@@ -49,8 +49,8 @@ export async function POST(req: NextRequest, { params }: RouteParams): Promise<R
 
 export async function DELETE(req: NextRequest, { params }: RouteParams): Promise<Response> {
   try {
-    // bookId/chapterId 可供未来权限校验使用，暂时只解析 quoteId
-    await params;
+    // 解构 params 以备未来权限校验使用（bookId/chapterId）
+    const { bookId: _bookId, chapterId: _chapterId } = await params;
 
     const body = await req.json();
     const { quoteId } = deleteQuoteSchema.parse(body);

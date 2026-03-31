@@ -50,7 +50,11 @@ export function QuoteManager({ bookId, chapterId, initialQuotes }: QuoteManagerP
     if (deletingId) return;
     setDeletingId(id);
     try {
-      const res = await fetch(`${baseUrl}/${id}`, { method: 'DELETE' });
+      const res = await fetch(baseUrl, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ quoteId: id }),
+      });
       if (res.ok) {
         setQuotes((prev) => prev.filter((q) => q.id !== id));
       }

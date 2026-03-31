@@ -7,6 +7,7 @@ interface UseSyncResult {
   syncStatus: SyncStatus;
   triggerSync: () => Promise<void>;
   result: SyncResult | null;
+  errorMessage: string | null;
 }
 
 /**
@@ -17,12 +18,14 @@ interface UseSyncResult {
 export function useSync(bookId: string): UseSyncResult {
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('idle');
   const [result, setResult] = useState<SyncResult | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const triggerSync = useCallback(async () => {
     if (!bookId || syncStatus === 'syncing') return;
 
     setSyncStatus('syncing');
     setResult(null);
+    setErrorMessage(null);
 
     try {
       const res = await fetch(`/api/books/${bookId}/sync`, { method: 'POST' });
@@ -34,10 +37,22 @@ export function useSync(bookId: string): UseSyncResult {
 
       setResult(json.data ?? json);
       setSyncStatus('success');
-    } catch {
+    } catch (err: unknown) {
+      // 区分 cookie 过期（401）与网络错误，给出具体提示
+      let msg = '同步失败，请稍后重试';
+      if (err instanceof Error) {
+        if (err.message.includes('401') || err.message.toLowerCase().includes('unauthorized')) {
+          msg = '登录已过期，请重新扫码登录';
+        } else if (err.name === 'TypeError' || err.message.toLowerCase().includes('fetch')) {
+          msg = '网络错误，请检查网络连接';
+        } else if (err.message) {
+          msg = err.message;
+        }
+      }
+      setErrorMessage(msg);
       setSyncStatus('error');
     }
   }, [bookId, syncStatus]);
 
-  return { syncStatus, triggerSync, result };
+  return { syncStatus, triggerSync, result, errorMessage };
 }

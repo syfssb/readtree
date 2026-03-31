@@ -115,14 +115,11 @@ async function completeLoginAndSaveCookie(data: GetInfoResponse): Promise<void> 
 
   const cookie = `wr_vid=${data.vid}; wr_skey=${data.skey}`;
 
-  console.log('[auth/status] constructed cookie, verifying...');
-
   const isValid = await verifyCookie(cookie);
   if (!isValid) {
     throw new Error('cookie 验证失败，登录凭据不可用');
   }
 
-  console.log('[auth/status] cookie verified, saving');
   await configRepo.upsertConfig(cookie);
 }
 
@@ -152,42 +149,32 @@ export async function GET(req: NextRequest): Promise<Response> {
       cache: 'no-store',
     });
 
-    console.log('[auth/status] getinfo response status:', pollRes.status);
-
     if (!pollRes.ok) {
-      console.log('[auth/status] getinfo not ok:', pollRes.status, pollRes.statusText);
       return successResponse<{ status: LoginStatus }>({ status: 'error' });
     }
 
     const rawText = await pollRes.text();
-    console.log('[auth/status] getinfo raw response:', rawText);
 
     let data: GetInfoResponse;
     try {
       data = JSON.parse(rawText) as GetInfoResponse;
     } catch {
-      console.log('[auth/status] Failed to parse JSON');
       return successResponse<{ status: LoginStatus }>({ status: 'error' });
     }
 
     // errcode 非零表示 UID 已过期或其他错误
     const errCode = data.errcode ?? data.errCode;
     if (errCode) {
-      console.log('[auth/status] errcode:', errCode);
       return successResponse<{ status: LoginStatus }>({ status: 'expired' });
     }
 
     // scan === 0：未扫码，继续等待
     if (data.scan === 0) {
-      console.log('[auth/status] scan=0, waiting');
       return successResponse<{ status: LoginStatus }>({ status: 'waiting' });
     }
 
-    console.log('[auth/status] scan success, vid:', data.vid, 'skey:', data.skey ? '[present]' : '[missing]');
-
     // 扫码成功：vid 必须存在
     if (!data.vid) {
-      console.log('[auth/status] no vid');
       return successResponse<{ status: LoginStatus }>({ status: 'error' });
     }
 
@@ -196,14 +183,12 @@ export async function GET(req: NextRequest): Promise<Response> {
       await completeLoginAndSaveCookie(data);
       // 登录成功后清理会话存储
       sessionStore.delete(uid);
-    } catch (loginErr) {
-      console.log('[auth/status] completeLogin failed:', loginErr instanceof Error ? loginErr.message : loginErr);
+    } catch {
       return successResponse<{ status: LoginStatus }>({ status: 'error' });
     }
 
     return successResponse<{ status: LoginStatus }>({ status: 'success' });
   } catch (err) {
-    console.log('[auth/status] outer catch:', err instanceof Error ? `${err.name}: ${err.message}` : err);
     if (err instanceof Error && err.name === 'AbortError') {
       return successResponse<{ status: LoginStatus }>({ status: 'waiting' });
     }

@@ -62,7 +62,7 @@ export function SummaryEditor({ bookId, chapterId, initialSummary }: SummaryEdit
             'absolute top-0 right-0 font-sans text-xs',
             saveState === 'saving'
               ? 'text-[var(--color-text-subtle)]'
-              : 'text-[var(--color-text-subtle)]'
+              : 'text-[#788c5d]'
           )}
         >
           {statusText}
