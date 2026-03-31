@@ -1,47 +1,42 @@
 /**
  * GET /api/auth/status?uid={uid} — 轮询微信读书扫码登录状态
  *
- * 流程：
- * 1. 向 i.weread.qq.com/web/getlogininfo 发起长轮询（最多 60s）
- * 2. 未扫码（scan=0）→ 返回 { status: 'waiting' }
- * 3. 扫码成功（scan=1）→ 携带 vid+skey 调用 /wrpage/session/init 获取完整 Cookie
- * 4. 从 set-cookie 响应头提取所有 wr_* Cookie，拼接后保存到 config
- * 5. 返回 { status: 'success' }
- * 6. 二维码过期（errcode: -2910）或网络异常 → 返回 { status: 'expired' }
+ * 使用 Web 阅读器的登录 API（非 CP 平台）：
+ * 1. POST weread.qq.com/web/login/getinfo → 长轮询等待扫码
+ * 2. 扫码成功 → POST weread.qq.com/web/login/weblogin 完成登录
+ * 3. 从 set-cookie 头提取 wr_* Cookie 并保存
  */
 
 import { NextRequest } from 'next/server';
-import { successResponse, errorResponse, handleError } from '@/lib/utils/response';
+import { successResponse, handleError, errorResponse } from '@/lib/utils/response';
 import * as configRepo from '@/repositories/config.repository';
 
-const WEREAD_I_BASE = 'https://i.weread.qq.com';
-const WEREAD_WEB_BASE = 'https://weread.qq.com';
+const WEREAD_BASE = 'https://weread.qq.com';
 
 const USER_AGENT =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) ' +
   'AppleWebKit/537.36 (KHTML, like Gecko) ' +
   'Chrome/120.0.0.0 Safari/537.36';
 
-/** 登录状态枚举 */
 type LoginStatus = 'waiting' | 'success' | 'expired' | 'error';
 
-/** WeRead getlogininfo 响应结构 */
-interface GetLoginInfoResponse {
+interface GetInfoResponse {
   errcode?: number;
-  /** 0 = 未扫码；1 = 已扫码并确认 */
+  errCode?: number;
   scan?: number;
   vid?: number;
   skey?: string;
+  accessToken?: string;
+  refreshToken?: string;
+  [key: string]: unknown;
 }
 
 /**
- * 从 Response 的 set-cookie 头提取所有 wr_* cookie，
- * 拼接为 "name=value; name2=value2" 格式的 Cookie 字符串。
+ * 从 Response 的 set-cookie 头提取所有 wr_* cookie
  */
 function extractCookieString(response: Response): string {
   const setCookieHeader = response.headers.getSetCookie?.() ?? [];
 
-  // Node.js 18 以下可能没有 getSetCookie，降级处理
   const rawCookies: string[] =
     setCookieHeader.length > 0
       ? setCookieHeader
@@ -50,7 +45,6 @@ function extractCookieString(response: Response): string {
   const cookieMap = new Map<string, string>();
 
   for (const raw of rawCookies) {
-    // set-cookie 格式: "name=value; Path=/; Domain=...; ..."
     const [nameValue] = raw.split(';');
     if (!nameValue) continue;
 
@@ -60,7 +54,6 @@ function extractCookieString(response: Response): string {
     const name = nameValue.slice(0, eqIdx).trim();
     const value = nameValue.slice(eqIdx + 1).trim();
 
-    // 只保留有值的 wr_* cookie（空值意味着清除）
     if (name.startsWith('wr_') && value) {
       cookieMap.set(name, value);
     }
@@ -72,23 +65,25 @@ function extractCookieString(response: Response): string {
 }
 
 /**
- * 从 getlogininfo 返回的 vid + skey 直接构建 Cookie 并保存。
- *
- * 优先尝试 session/init 获取完整 Cookie（含 wr_rt 等），
- * 失败则回退为手动拼接 wr_vid + wr_skey（足以调用 i.weread.qq.com API）。
+ * 扫码成功后，调用 weblogin 完成登录并提取 Cookie
  */
-async function buildAndSaveCookie(vid: number, skey: string): Promise<string> {
-  // 尝试 session/init 获取完整 Cookie
+async function completeLoginAndSaveCookie(data: GetInfoResponse): Promise<void> {
+  // 方案 1：尝试 weblogin 获取完整 Cookie
   try {
-    const res = await fetch(`${WEREAD_WEB_BASE}/wrpage/session/init`, {
+    const res = await fetch(`${WEREAD_BASE}/web/login/weblogin`, {
       method: 'POST',
       headers: {
         'User-Agent': USER_AGENT,
         Accept: 'application/json, text/plain, */*',
-        'Content-Type': 'application/x-www-form-urlencoded',
-        Referer: 'https://weread.qq.com/wrpage/login',
+        'Content-Type': 'application/json',
+        Referer: 'https://weread.qq.com/web/reader/',
       },
-      body: new URLSearchParams({ vid: String(vid), skey }).toString(),
+      body: JSON.stringify({
+        vid: data.vid,
+        skey: data.skey,
+        accessToken: data.accessToken,
+        refreshToken: data.refreshToken,
+      }),
       signal: AbortSignal.timeout(10_000),
       cache: 'no-store',
     });
@@ -97,20 +92,50 @@ async function buildAndSaveCookie(vid: number, skey: string): Promise<string> {
       const cookie = extractCookieString(res);
       if (cookie) {
         await configRepo.upsertConfig(cookie);
-        return cookie;
+        return;
       }
     }
   } catch {
-    // session/init 失败，回退到手动构建
+    // weblogin 失败，尝试回退
   }
 
-  // 回退：直接用 vid + skey 构建 Cookie
-  const cookie = `wr_vid=${vid}; wr_skey=${skey}`;
-  await configRepo.upsertConfig(cookie);
-  return cookie;
-}
+  // 方案 2：尝试 session/init
+  try {
+    if (data.vid && data.skey) {
+      const res = await fetch(`${WEREAD_BASE}/web/login/session/init`, {
+        method: 'POST',
+        headers: {
+          'User-Agent': USER_AGENT,
+          Accept: 'application/json, text/plain, */*',
+          'Content-Type': 'application/json',
+          Referer: 'https://weread.qq.com/web/reader/',
+        },
+        body: JSON.stringify({ vid: data.vid, skey: data.skey }),
+        signal: AbortSignal.timeout(10_000),
+        cache: 'no-store',
+      });
 
-// ---------- GET /api/auth/status ----------
+      if (res.ok) {
+        const cookie = extractCookieString(res);
+        if (cookie) {
+          await configRepo.upsertConfig(cookie);
+          return;
+        }
+      }
+    }
+  } catch {
+    // session/init 也失败
+  }
+
+  // 方案 3：直接用 vid + skey 构建 Cookie
+  if (data.vid && data.skey) {
+    const cookie = `wr_vid=${data.vid}; wr_skey=${data.skey}`;
+    await configRepo.upsertConfig(cookie);
+    return;
+  }
+
+  throw new Error('无法获取有效的登录凭据');
+}
 
 export async function GET(req: NextRequest): Promise<Response> {
   const uid = req.nextUrl.searchParams.get('uid');
@@ -120,17 +145,15 @@ export async function GET(req: NextRequest): Promise<Response> {
   }
 
   try {
-    // 长轮询：微信读书会在服务端挂起最多 60s 等待扫码
-    const pollRes = await fetch(`${WEREAD_I_BASE}/web/getlogininfo`, {
+    const pollRes = await fetch(`${WEREAD_BASE}/web/login/getinfo`, {
       method: 'POST',
       headers: {
         'User-Agent': USER_AGENT,
         Accept: 'application/json, text/plain, */*',
         'Content-Type': 'application/json',
-        Referer: 'https://weread.qq.com/wrpage/login',
+        Referer: 'https://weread.qq.com/web/reader/',
       },
       body: JSON.stringify({ uid }),
-      // 65 秒超时（比 WeRead 服务端的 60s 多留 5s 余量）
       signal: AbortSignal.timeout(65_000),
       cache: 'no-store',
     });
@@ -139,29 +162,29 @@ export async function GET(req: NextRequest): Promise<Response> {
       return successResponse<{ status: LoginStatus }>({ status: 'error' });
     }
 
-    const data = (await pollRes.json()) as GetLoginInfoResponse;
+    const data = (await pollRes.json()) as GetInfoResponse;
 
-    // errcode: -2910 表示 UID 已过期或已被使用
-    if (data.errcode) {
+    // errcode/-2910 表示 UID 已过期
+    const errCode = data.errcode ?? data.errCode;
+    if (errCode) {
       return successResponse<{ status: LoginStatus }>({ status: 'expired' });
     }
 
-    // scan=0：用户尚未扫码，仍在等待中
-    if (!data.scan) {
+    // scan === 0：未扫码
+    if (data.scan === 0) {
       return successResponse<{ status: LoginStatus }>({ status: 'waiting' });
     }
 
-    // 扫码成功：vid + skey 必须存在
-    if (!data.vid || !data.skey) {
+    // 扫码成功：vid 必须存在
+    if (!data.vid) {
       return successResponse<{ status: LoginStatus }>({ status: 'error' });
     }
 
-    // 构建并保存 Cookie
-    await buildAndSaveCookie(data.vid, data.skey);
+    // 完成登录并保存 Cookie
+    await completeLoginAndSaveCookie(data);
 
     return successResponse<{ status: LoginStatus }>({ status: 'success' });
   } catch (err) {
-    // AbortError 说明轮询超时（60s 内用户未扫码）
     if (err instanceof Error && err.name === 'AbortError') {
       return successResponse<{ status: LoginStatus }>({ status: 'waiting' });
     }
