@@ -72,34 +72,41 @@ function extractCookieString(response: Response): string {
 }
 
 /**
- * 调用 /wrpage/session/init 完成 Web 会话初始化，
- * 从响应的 set-cookie 头提取完整 Cookie 并保存到配置。
+ * 从 getlogininfo 返回的 vid + skey 直接构建 Cookie 并保存。
+ *
+ * 优先尝试 session/init 获取完整 Cookie（含 wr_rt 等），
+ * 失败则回退为手动拼接 wr_vid + wr_skey（足以调用 i.weread.qq.com API）。
  */
-async function initSessionAndSaveCookie(vid: number, skey: string): Promise<string> {
-  const res = await fetch(`${WEREAD_WEB_BASE}/wrpage/session/init`, {
-    method: 'POST',
-    headers: {
-      'User-Agent': USER_AGENT,
-      Accept: 'application/json, text/plain, */*',
-      'Content-Type': 'application/x-www-form-urlencoded',
-      Referer: 'https://weread.qq.com/wrpage/login',
-    },
-    body: new URLSearchParams({ vid: String(vid), skey }).toString(),
-    cache: 'no-store',
-  });
+async function buildAndSaveCookie(vid: number, skey: string): Promise<string> {
+  // 尝试 session/init 获取完整 Cookie
+  try {
+    const res = await fetch(`${WEREAD_WEB_BASE}/wrpage/session/init`, {
+      method: 'POST',
+      headers: {
+        'User-Agent': USER_AGENT,
+        Accept: 'application/json, text/plain, */*',
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Referer: 'https://weread.qq.com/wrpage/login',
+      },
+      body: new URLSearchParams({ vid: String(vid), skey }).toString(),
+      signal: AbortSignal.timeout(10_000),
+      cache: 'no-store',
+    });
 
-  if (!res.ok) {
-    throw new Error(`session/init 失败：${res.status}`);
+    if (res.ok) {
+      const cookie = extractCookieString(res);
+      if (cookie) {
+        await configRepo.upsertConfig(cookie);
+        return cookie;
+      }
+    }
+  } catch {
+    // session/init 失败，回退到手动构建
   }
 
-  const cookie = extractCookieString(res);
-
-  if (!cookie) {
-    throw new Error('session/init 未返回有效 Cookie');
-  }
-
+  // 回退：直接用 vid + skey 构建 Cookie
+  const cookie = `wr_vid=${vid}; wr_skey=${skey}`;
   await configRepo.upsertConfig(cookie);
-
   return cookie;
 }
 
@@ -149,8 +156,8 @@ export async function GET(req: NextRequest): Promise<Response> {
       return successResponse<{ status: LoginStatus }>({ status: 'error' });
     }
 
-    // 完成 session 初始化并保存 Cookie
-    await initSessionAndSaveCookie(data.vid, data.skey);
+    // 构建并保存 Cookie
+    await buildAndSaveCookie(data.vid, data.skey);
 
     return successResponse<{ status: LoginStatus }>({ status: 'success' });
   } catch (err) {
