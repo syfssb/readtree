@@ -10,13 +10,11 @@ interface UseChapterContentResult {
   notes: Note[];
   quotes: ManualQuote[];
   isLoading: boolean;
+  refresh: () => void;
 }
 
 /**
  * 获取章节详细内容（划线、笔记、引用）
- *
- * @param bookId    书籍 ID
- * @param chapterId 章节 ID，为 null 时不发起请求
  */
 export function useChapterContent(
   bookId: string,
@@ -27,6 +25,7 @@ export function useChapterContent(
   const [notes, setNotes] = useState<Note[]>([]);
   const [quotes, setQuotes] = useState<ManualQuote[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     if (!bookId || !chapterId) {
@@ -42,18 +41,18 @@ export function useChapterContent(
 
     const base = `/api/books/${bookId}/chapters/${chapterId}`;
 
+    // 章节详情（含 highlights + notes）和 quotes 并行请求
     Promise.all([
       fetch(base).then((r) => r.json()),
-      fetch(`${base}/highlights`).then((r) => r.json()),
-      fetch(`${base}/notes`).then((r) => r.json()),
       fetch(`${base}/quotes`).then((r) => r.json()),
     ])
-      .then(([chapterJson, highlightsJson, notesJson, quotesJson]) => {
+      .then(([chapterJson, quotesJson]) => {
         if (cancelled) return;
-        setChapter(chapterJson.data ?? chapterJson);
-        setHighlights(highlightsJson.data ?? highlightsJson ?? []);
-        setNotes(notesJson.data ?? notesJson ?? []);
-        setQuotes(quotesJson.data ?? quotesJson ?? []);
+        const data = chapterJson.data ?? chapterJson;
+        setChapter(data.chapter ?? data);
+        setHighlights(data.highlights ?? []);
+        setNotes(data.notes ?? []);
+        setQuotes(quotesJson.data ?? []);
       })
       .catch(() => {
         if (cancelled) return;
@@ -68,7 +67,9 @@ export function useChapterContent(
     return () => {
       cancelled = true;
     };
-  }, [bookId, chapterId]);
+  }, [bookId, chapterId, refreshKey]);
 
-  return { chapter, highlights, notes, quotes, isLoading };
+  const refresh = () => setRefreshKey((k) => k + 1);
+
+  return { chapter, highlights, notes, quotes, isLoading, refresh };
 }
