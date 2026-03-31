@@ -67,13 +67,28 @@ export async function resolveBookId(url: string): Promise<string> {
   }
 
   const html = await res.text();
-  const match = /"bookId":"(\d+)"/.exec(html);
+  const matches = html.matchAll(/"bookId":"(\d+)"/g);
 
-  if (!match) {
+  // 统计每个 bookId 出现次数，取最多的（页面中旧版 bookId 只出现 1-2 次）
+  const counts = new Map<string, number>();
+  for (const m of matches) {
+    counts.set(m[1], (counts.get(m[1]) ?? 0) + 1);
+  }
+
+  if (counts.size === 0) {
     throw new ValidationError('无法从页面中解析书籍 ID');
   }
 
-  return match[1];
+  let bestId = '';
+  let bestCount = 0;
+  for (const [id, count] of counts) {
+    if (count > bestCount) {
+      bestId = id;
+      bestCount = count;
+    }
+  }
+
+  return bestId;
 }
 
 /** 向后兼容：同步提取（仅返回 slug，不是真实 bookId） */
