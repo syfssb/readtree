@@ -163,13 +163,14 @@ export async function GET(req: NextRequest): Promise<Response> {
   const sessionCookie = sessionEntry?.cookies ?? '';
 
   try {
-    // Bug 1 修复：改用 GET + query string 长轮询（原来是 POST + JSON body）
-    const pollRes = await fetch(`${WEREAD_BASE}/web/login/getinfo?uid=${encodeURIComponent(uid)}`, {
-      method: 'GET',
+    // 长轮询：POST /web/login/getinfo + JSON body（实测 GET 返回 404）
+    const pollRes = await fetch(`${WEREAD_BASE}/web/login/getinfo`, {
+      method: 'POST',
       headers: {
         ...BASE_HEADERS,
         ...(sessionCookie ? { Cookie: sessionCookie } : {}),
       },
+      body: JSON.stringify({ uid }),
       signal: AbortSignal.timeout(65_000),
       cache: 'no-store',
     });

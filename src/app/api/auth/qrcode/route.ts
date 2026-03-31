@@ -7,6 +7,7 @@
  */
 
 import { successResponse, handleError, errorResponse } from '@/lib/utils/response';
+import QRCode from 'qrcode';
 
 const WEREAD_BASE = 'https://weread.qq.com';
 
@@ -115,7 +116,14 @@ export async function GET(): Promise<Response> {
     // 二维码内容：pf=2 表示非 iOS 平台
     const qrUrl = `https://weread.qq.com/web/confirm?pf=2&uid=${data.uid}`;
 
-    return successResponse({ uid: data.uid, qrUrl });
+    // 服务端生成二维码 Data URL（避免依赖外部服务）
+    const qrDataUrl = await QRCode.toDataURL(qrUrl, {
+      width: 200,
+      margin: 2,
+      color: { dark: '#141413', light: '#ffffff' },
+    });
+
+    return successResponse({ uid: data.uid, qrUrl, qrDataUrl });
   } catch (err) {
     return handleError(err);
   }

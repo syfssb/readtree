@@ -35,6 +35,7 @@ interface QrLoginProps {
 interface QrcodeData {
   uid: string;
   qrUrl: string;
+  qrDataUrl: string;
 }
 
 // ---------- 常量 ----------
@@ -42,10 +43,7 @@ interface QrcodeData {
 /** 二维码视觉过期时间（毫秒），与微信读书服务端保持一致 */
 const QR_EXPIRE_MS = 3 * 60 * 1000;
 
-/** 生成 QR 图片 URL（使用免费的 qrserver.com 服务） */
-function buildQrImageUrl(qrUrl: string): string {
-  return `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrUrl)}`;
-}
+// 二维码图片由服务端生成 Data URL，无需外部服务
 
 // ---------- 组件 ----------
 
@@ -230,7 +228,7 @@ export function QrLogin({ onSuccess }: QrLoginProps) {
           {(status === 'scanning' || status === 'expired') && qrcodeData && (
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              src={buildQrImageUrl(qrcodeData.qrUrl)}
+              src={qrcodeData.qrDataUrl}
               alt="微信读书登录二维码"
               width={200}
               height={200}
