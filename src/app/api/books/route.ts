@@ -5,7 +5,7 @@
 
 import { NextRequest } from 'next/server';
 import { addBookSchema } from '@/lib/validators';
-import { extractBookId, mapChapterInfoToChapter } from '@/lib/weread/parser';
+import { resolveBookId, mapChapterInfoToChapter } from '@/lib/weread/parser';
 import { WeReadClient } from '@/lib/weread/client';
 import * as bookRepo from '@/repositories/book.repository';
 import * as chapterRepo from '@/repositories/chapter.repository';
@@ -31,7 +31,8 @@ export async function POST(req: NextRequest): Promise<Response> {
     const body = await req.json();
     const { url } = addBookSchema.parse(body);
 
-    const bookId = extractBookId(url);
+    // 从页面 HTML 解析真实 bookId（URL 路径编码串 ≠ API bookId）
+    const bookId = await resolveBookId(url);
 
     // 防止重复添加
     const existing = await bookRepo.findByWereadId(bookId);

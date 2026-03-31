@@ -103,49 +103,26 @@ async function verifyCookie(cookie: string): Promise<boolean> {
 }
 
 /**
- * 扫码成功后，调用 weblogin 完成登录并提取可用 Cookie。
- * 失败时抛出 Error，由调用方映射为 error 状态（不伪造假成功）。
+ * 扫码成功后，直接用 getinfo 返回的 vid + skey 构建 Cookie 并验证。
  *
- * @param data     getinfo 响应体
- * @param sessionCookie  getuid 阶段保存的会话 cookie（随请求携带）
+ * getinfo 成功时返回的 vid 就是 wr_vid，skey 就是 wr_skey，
+ * 不需要再调 weblogin（那是另一个流程）。
  */
-async function completeLoginAndSaveCookie(
-  data: GetInfoResponse,
-  sessionCookie: string,
-): Promise<void> {
-  // weblogin：携带会话 cookie，获取完整登录凭据
-  const webloginRes = await fetch(`${WEREAD_BASE}/web/login/weblogin`, {
-    method: 'POST',
-    headers: {
-      ...BASE_HEADERS,
-      Cookie: sessionCookie,
-    },
-    body: JSON.stringify({
-      vid: data.vid,
-      skey: data.skey,
-      accessToken: data.accessToken,
-      refreshToken: data.refreshToken,
-    }),
-    signal: AbortSignal.timeout(10_000),
-    cache: 'no-store',
-  });
-
-  if (!webloginRes.ok) {
-    throw new Error(`weblogin 失败：${webloginRes.status}`);
+async function completeLoginAndSaveCookie(data: GetInfoResponse): Promise<void> {
+  if (!data.vid || !data.skey) {
+    throw new Error('getinfo 响应缺少 vid 或 skey');
   }
 
-  const cookie = extractWrCookies(webloginRes);
+  const cookie = `wr_vid=${data.vid}; wr_skey=${data.skey}`;
 
-  if (!cookie) {
-    throw new Error('weblogin 响应未包含有效 cookie');
-  }
+  console.log('[auth/status] constructed cookie, verifying...');
 
-  // 保存前验证 cookie 可用性（Bug 4 修复）
   const isValid = await verifyCookie(cookie);
   if (!isValid) {
     throw new Error('cookie 验证失败，登录凭据不可用');
   }
 
+  console.log('[auth/status] cookie verified, saving');
   await configRepo.upsertConfig(cookie);
 }
 
@@ -175,42 +152,59 @@ export async function GET(req: NextRequest): Promise<Response> {
       cache: 'no-store',
     });
 
+    console.log('[auth/status] getinfo response status:', pollRes.status);
+
     if (!pollRes.ok) {
+      console.log('[auth/status] getinfo not ok:', pollRes.status, pollRes.statusText);
       return successResponse<{ status: LoginStatus }>({ status: 'error' });
     }
 
-    const data = (await pollRes.json()) as GetInfoResponse;
+    const rawText = await pollRes.text();
+    console.log('[auth/status] getinfo raw response:', rawText);
+
+    let data: GetInfoResponse;
+    try {
+      data = JSON.parse(rawText) as GetInfoResponse;
+    } catch {
+      console.log('[auth/status] Failed to parse JSON');
+      return successResponse<{ status: LoginStatus }>({ status: 'error' });
+    }
 
     // errcode 非零表示 UID 已过期或其他错误
     const errCode = data.errcode ?? data.errCode;
     if (errCode) {
+      console.log('[auth/status] errcode:', errCode);
       return successResponse<{ status: LoginStatus }>({ status: 'expired' });
     }
 
     // scan === 0：未扫码，继续等待
     if (data.scan === 0) {
+      console.log('[auth/status] scan=0, waiting');
       return successResponse<{ status: LoginStatus }>({ status: 'waiting' });
     }
 
+    console.log('[auth/status] scan success, vid:', data.vid, 'skey:', data.skey ? '[present]' : '[missing]');
+
     // 扫码成功：vid 必须存在
     if (!data.vid) {
+      console.log('[auth/status] no vid');
       return successResponse<{ status: LoginStatus }>({ status: 'error' });
     }
 
     // 完成登录、验证并保存 Cookie
     try {
-      await completeLoginAndSaveCookie(data, sessionCookie);
+      await completeLoginAndSaveCookie(data);
       // 登录成功后清理会话存储
       sessionStore.delete(uid);
-    } catch {
-      // weblogin 或 cookie 验证失败 → 返回 error，不伪造假成功（Bug 4 修复）
+    } catch (loginErr) {
+      console.log('[auth/status] completeLogin failed:', loginErr instanceof Error ? loginErr.message : loginErr);
       return successResponse<{ status: LoginStatus }>({ status: 'error' });
     }
 
     return successResponse<{ status: LoginStatus }>({ status: 'success' });
   } catch (err) {
+    console.log('[auth/status] outer catch:', err instanceof Error ? `${err.name}: ${err.message}` : err);
     if (err instanceof Error && err.name === 'AbortError') {
-      // 长轮询超时，前端继续下一轮
       return successResponse<{ status: LoginStatus }>({ status: 'waiting' });
     }
     return handleError(err);

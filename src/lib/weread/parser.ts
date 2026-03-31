@@ -20,15 +20,11 @@ const READER_PATH_PATTERN = /\/web\/reader\/([^/?#]+)/;
 const BOOK_DETAIL_PATTERN = /\/web\/bookDetail\/([^/?#]+)/;
 
 /**
- * 从微信读书 URL 中提取 bookId
+ * 从微信读书 URL 中提取路径编码串（非真实 bookId）
  *
- * 支持格式：
- * - https://weread.qq.com/web/reader/xxxxxxxx
- * - https://weread.qq.com/web/bookDetail/xxxxxxxx
- *
- * @throws {ValidationError} URL 无效或无法提取 bookId
+ * @throws {ValidationError} URL 无效
  */
-export function extractBookId(url: string): string {
+export function extractUrlSlug(url: string): string {
   let parsed: URL;
 
   try {
@@ -48,6 +44,41 @@ export function extractBookId(url: string): string {
   if (detailMatch) return detailMatch[1];
 
   throw new ValidationError('无法从 URL 中提取书籍 ID，请检查链接格式');
+}
+
+/**
+ * 从微信读书页面 HTML 中提取真实的 bookId（数字格式）。
+ *
+ * WeRead URL 路径中的编码串不是 API 使用的 bookId，
+ * 真实 bookId 嵌在页面 HTML 的 __INITIAL_STATE__ 中。
+ */
+export async function resolveBookId(url: string): Promise<string> {
+  const slug = extractUrlSlug(url);
+
+  const res = await fetch(`https://weread.qq.com/web/reader/${slug}`, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    },
+    signal: AbortSignal.timeout(15_000),
+  });
+
+  if (!res.ok) {
+    throw new ValidationError('无法访问该书籍页面，请检查链接');
+  }
+
+  const html = await res.text();
+  const match = /"bookId":"(\d+)"/.exec(html);
+
+  if (!match) {
+    throw new ValidationError('无法从页面中解析书籍 ID');
+  }
+
+  return match[1];
+}
+
+/** 向后兼容：同步提取（仅返回 slug，不是真实 bookId） */
+export function extractBookId(url: string): string {
+  return extractUrlSlug(url);
 }
 
 /**
