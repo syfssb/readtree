@@ -1,0 +1,24 @@
+{
+  "name": "ReadTree — 你的微信读书知识树",
+  "short_name": "ReadTree",
+  "description": "把碎片化的划线笔记，长成一棵有结构的知识树",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#faf9f5",
+  "theme_color": "#ae5630",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
