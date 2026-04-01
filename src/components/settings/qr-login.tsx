@@ -217,23 +217,25 @@ export function QrLogin({ onSuccess }: QrLoginProps) {
             'w-[200px] h-[200px] rounded-xl overflow-hidden',
             'border border-[var(--color-border)]',
             'bg-[var(--color-page-bg)]',
+            'flex items-center justify-center',
           )}
         >
           {status === 'loading' && (
-            <div className="w-full h-full flex items-center justify-center">
-              <Loader2 size={32} className="animate-spin text-[var(--color-text-muted)]" />
-            </div>
+            <Loader2 size={32} className="animate-spin text-[var(--color-text-muted)]" />
           )}
 
           {(status === 'scanning' || status === 'expired') && qrcodeData && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={qrcodeData.qrDataUrl}
-              alt="微信读书登录二维码"
-              width={200}
-              height={200}
-              className="w-full h-full object-cover"
-            />
+            /* 白色 padding 包裹，确保暗色模式下二维码（白底黑点）清晰可见 */
+            <div className="bg-white p-3 rounded-lg">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={qrcodeData.qrDataUrl}
+                alt="微信读书登录二维码"
+                width={168}
+                height={168}
+                className="block"
+              />
+            </div>
           )}
         </div>
 

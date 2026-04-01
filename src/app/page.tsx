@@ -30,9 +30,11 @@ export default function HomePage() {
       <main className="pt-14">
         {/* Hero 区域 */}
         <section className="flex flex-col items-center justify-center px-6 py-20 text-center">
-          <h1 className="font-serif text-4xl font-bold text-[var(--color-text-primary)] mb-3">
+          <h1 className="font-serif text-5xl font-bold text-[var(--color-text-primary)] mb-4">
             ReadTree
           </h1>
+          {/* 装饰性细线 */}
+          <div className="w-12 h-0.5 bg-[#ae5630] mx-auto mb-6" />
           <p className="font-sans text-base text-[var(--color-text-muted)] mb-10 max-w-md">
             把碎片化的划线笔记，长成一棵有结构的知识树
           </p>

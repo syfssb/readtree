@@ -12,6 +12,8 @@ import { QuoteManager } from './quote-manager';
 export interface ChapterDetailProps {
   bookId: string;
   chapterId: string | null;
+  /** 用于面包屑导航的书名 */
+  bookTitle?: string;
 }
 
 /** 区块标题样式 */
@@ -23,7 +25,7 @@ const sectionTitleClass =
  * - 无选中时显示引导提示
  * - 有选中时展示总结、划线、笔记、引用
  */
-export function ChapterDetail({ bookId, chapterId }: ChapterDetailProps) {
+export function ChapterDetail({ bookId, chapterId, bookTitle }: ChapterDetailProps) {
   const { chapter, highlights, notes, quotes, isLoading } = useChapterContent(
     bookId,
     chapterId
@@ -54,11 +56,22 @@ export function ChapterDetail({ bookId, chapterId }: ChapterDetailProps) {
 
   return (
     <div className="flex flex-col gap-6">
-      {/* 章节标题 */}
+      {/* 面包屑导航 */}
       {chapter && (
-        <h2 className="font-serif text-2xl font-semibold text-[var(--color-text-primary)] leading-snug">
-          {chapter.title}
-        </h2>
+        <nav
+          aria-label="面包屑"
+          className="flex items-center gap-1.5 font-sans text-xs text-[var(--color-text-muted)] flex-wrap"
+        >
+          {bookTitle && (
+            <>
+              <span className="truncate max-w-[10rem]">{bookTitle}</span>
+              <span aria-hidden="true" className="text-[var(--color-text-disabled)]">›</span>
+            </>
+          )}
+          <span className="text-[var(--color-text-secondary)] font-medium truncate max-w-[16rem]">
+            {chapter.title}
+          </span>
+        </nav>
       )}
 
       {/* 总结区块 */}

@@ -19,13 +19,13 @@ export interface ButtonProps
 /** 变体样式映射 */
 const variantStyles: Record<ButtonVariant, string> = {
   primary:
-    'bg-[#141413] text-[#faf9f5] hover:bg-[#3d3d3a]',
+    'bg-[var(--color-text-primary)] text-[var(--color-page-bg)] hover:opacity-80',
   cta:
     'bg-[#c6613f] text-[#faf9f5] hover:bg-[#d97757]',
   ghost:
-    'bg-transparent border border-[var(--color-border)] hover:border-[#141413] text-[var(--color-text-primary)]',
+    'bg-transparent border border-[var(--color-border)] hover:border-[var(--color-border-hover)] text-[var(--color-text-primary)]',
   outline:
-    'bg-transparent border border-[#141413] text-[#141413] hover:bg-[#141413] hover:text-[#faf9f5]',
+    'bg-transparent border border-[var(--color-text-primary)] text-[var(--color-text-primary)] hover:bg-[var(--color-text-primary)] hover:text-[var(--color-page-bg)]',
 };
 
 /** 尺寸样式映射 */

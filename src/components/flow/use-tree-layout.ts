@@ -81,6 +81,32 @@ function collectDescendantIds(
 }
 
 // ---------------------------------------------------------------------------
+// 辅助：收集指定节点的直接子节点下的所有后代数量（用于隐藏 badge）
+// ---------------------------------------------------------------------------
+function countAllDescendants(
+  nodeId: string,
+  childMap: Map<string, string[]>
+): number {
+  return collectDescendantIds(nodeId, childMap).size;
+}
+
+// ---------------------------------------------------------------------------
+// 辅助：收集前两层节点 ID（level 1 和 level 2）
+// ---------------------------------------------------------------------------
+function collectFirstTwoLayerIds(tree: readonly ChapterTreeNode[]): Set<string> {
+  const ids = new Set<string>();
+  // level 1 节点（根节点）
+  for (const node of tree) {
+    ids.add(node.id);
+    // level 2 节点（根节点的直接子节点）
+    for (const child of node.children) {
+      ids.add(child.id);
+    }
+  }
+  return ids;
+}
+
+// ---------------------------------------------------------------------------
 // 主 Hook
 // ---------------------------------------------------------------------------
 
@@ -108,22 +134,24 @@ export interface UseTreeLayoutReturn {
  *
  * 策略：
  * - expandedIds 保存当前展开节点集合
+ * - 默认展开前两层（level 1 和 level 2），保证首次渲染节点数量适中
  * - 每次渲染时，仅把展开节点的子节点纳入 nodes/edges
  * - toggleExpand 折叠时同步删除所有后代
+ * - hiddenChildCount 记录折叠节点下隐藏的后代总数，传递给节点 data 以显示 badge
  */
 export function useTreeLayout({
   tree,
   stats,
   direction = 'LR',
 }: UseTreeLayoutOptions): UseTreeLayoutReturn {
-  // 默认展开第一层节点
+  // 默认展开前两层节点（level 1 + level 2）
   const [expandedIds, setExpandedIds] = useState<Set<string>>(
-    () => new Set(tree.map((n) => n.id))
+    () => collectFirstTwoLayerIds(tree)
   );
 
-  // 当 tree 引用变化时（如书籍切换或同步后数据更新），重置为默认展开第一层
+  // 当 tree 引用变化时（如书籍切换或同步后数据更新），重置为前两层展开
   useEffect(() => {
-    setExpandedIds(new Set(tree.map((n) => n.id)));
+    setExpandedIds(collectFirstTwoLayerIds(tree));
   }, [tree]);
 
   // 构建 id → 子节点 id 列表的映射，用于折叠时删除后代
@@ -166,6 +194,12 @@ export function useTreeLayout({
         const isExpanded = expandedIds.has(node.id);
         const nodeStats = stats?.[node.id];
 
+        // 折叠时计算隐藏的后代数量
+        const hiddenChildCount =
+          hasChildren && !isExpanded
+            ? countAllDescendants(node.id, childMap)
+            : 0;
+
         resultNodes.push({
           id: node.id,
           type: 'chapterNode',
@@ -177,6 +211,7 @@ export function useTreeLayout({
             isExpanded,
             highlightCount: nodeStats?.highlightCount ?? 0,
             noteCount: nodeStats?.noteCount ?? 0,
+            hiddenChildCount,
           },
         });
 
@@ -198,7 +233,7 @@ export function useTreeLayout({
 
     traverse(tree, null);
     return { nodes: resultNodes, edges: resultEdges };
-  }, [tree, expandedIds, stats]);
+  }, [tree, expandedIds, stats, childMap]);
 
   // 用 dagre 计算布局
   const layouted = useMemo(

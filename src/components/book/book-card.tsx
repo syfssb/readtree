@@ -2,7 +2,6 @@
 
 import React from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
 import { BookOpen } from 'lucide-react';
 import { cn } from '@/lib/utils/cn';
 import type { Book } from '@/types/book';
@@ -27,18 +26,19 @@ export function BookCard({ book }: BookCardProps) {
       )}
     >
       <div className="flex gap-3 items-start">
-        {/* 封面图或占位图标 */}
+        {/* 封面图或首字占位 */}
         <div className="shrink-0 w-12 h-16 rounded-md overflow-hidden bg-[var(--color-secondary)] flex items-center justify-center">
           {book.coverUrl ? (
-            <Image
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
               src={book.coverUrl}
               alt={book.title}
-              width={48}
-              height={64}
               className="w-full h-full object-cover"
             />
           ) : (
-            <BookOpen size={20} className="text-[var(--color-text-disabled)]" />
+            <span className="font-serif text-xl font-bold text-[var(--color-text-disabled)] select-none leading-none">
+              {book.title.charAt(0)}
+            </span>
           )}
         </div>
 

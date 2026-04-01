@@ -66,13 +66,24 @@ export default function BookPage({ params }: BookPageProps) {
         {/* 书籍信息 + 同步按钮 */}
         <div className="mb-4">
           {book && (
-            <div className="mb-3">
-              <h2 className="font-serif text-sm font-semibold text-[var(--color-text-primary)] leading-snug mb-0.5 line-clamp-2">
-                {book.title}
-              </h2>
-              <p className="font-sans text-xs text-[var(--color-text-muted)]">
-                {book.author}
-              </p>
+            <div className="mb-3 flex items-start gap-2">
+              {/* 封面小图 */}
+              {book.coverUrl && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={book.coverUrl}
+                  alt={book.title}
+                  className="w-8 h-8 rounded object-cover shrink-0 mt-0.5"
+                />
+              )}
+              <div className="min-w-0 flex-1">
+                <h2 className="font-serif text-base font-semibold text-[var(--color-text-primary)] leading-snug mb-0.5 line-clamp-2">
+                  {book.title}
+                </h2>
+                <p className="text-sm text-[var(--color-text-muted)]">
+                  {book.author}
+                </p>
+              </div>
             </div>
           )}
 
@@ -190,7 +201,11 @@ export default function BookPage({ params }: BookPageProps) {
             )}
           >
             <div className="max-w-3xl mx-auto px-6 py-8">
-              <ChapterDetail bookId={bookId} chapterId={selectedChapterId} />
+              <ChapterDetail
+                bookId={bookId}
+                chapterId={selectedChapterId}
+                bookTitle={book?.title}
+              />
             </div>
           </div>
         </div>

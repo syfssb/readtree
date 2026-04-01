@@ -50,6 +50,7 @@
 
   --shadow-card: none;
   --shadow-composer: none;
+  --shadow-modal: 0 16px 48px rgba(0,0,0,0.48);
 }
 
 /* ---- Tailwind Theme Extension ---- */
@@ -91,6 +92,17 @@ body {
 ::selection {
   background: #d9775733;
   color: var(--color-text-primary);
+}
+
+/* ---- React Flow 暗色模式覆盖 ---- */
+[data-theme="dark"] .react-flow {
+  --xy-background-color: var(--color-page-bg);
+  --xy-node-background-color: var(--color-card);
+  --xy-node-border-color: var(--color-border);
+  --xy-edge-stroke-color: var(--color-text-disabled);
+  --xy-minimap-background-color: var(--color-surface);
+  --xy-controls-button-background-color: var(--color-card);
+  --xy-controls-button-border-color: var(--color-border);
 }
 
 /* ---- Reduced Motion ---- */

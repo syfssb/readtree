@@ -74,7 +74,7 @@ export function UrlInput() {
   };
 
   return (
-    <div className="w-full flex flex-col gap-3">
+    <div className="w-full flex flex-col gap-2">
       <div className="flex gap-3">
         <div className="flex-1">
           <Input
@@ -94,15 +94,25 @@ export function UrlInput() {
           size="md"
           disabled={!url.trim() || isLoading}
           onClick={handleSubmit}
-          className="shrink-0 min-w-[100px]"
+          className="shrink-0 min-w-[130px]"
         >
           {isLoading ? (
-            <Loader2 size={16} className="animate-spin" />
+            <>
+              <Loader2 size={15} className="animate-spin shrink-0" />
+              <span className="ml-1.5 text-sm whitespace-nowrap">正在获取...</span>
+            </>
           ) : (
             '开始阅读'
           )}
         </Button>
       </div>
+
+      {/* 格式提示 */}
+      {!error && (
+        <p className="font-sans text-xs text-[var(--color-text-subtle)] pl-0.5">
+          支持 weread.qq.com/web/reader/... 格式的链接
+        </p>
+      )}
 
       {/* 错误提示 */}
       {error && (
