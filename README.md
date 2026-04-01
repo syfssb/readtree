@@ -59,36 +59,24 @@ ReadTree 的想法很简单：**以书籍目录为骨架，把你的划线和笔
 
 ---
 
-## 快速开始
-
-### 1. 克隆项目
+## 快速开始（本地开发）
 
 ```bash
+# 1. 克隆项目
 git clone https://github.com/syfssb/readtree.git
 cd readtree
-```
 
-### 2. 安装依赖
-
-```bash
+# 2. 安装依赖
 npm install
-```
 
-### 3. 初始化数据库
+# 3. 初始化本地数据库（SQLite，零配置）
+npx drizzle-kit push
 
-```bash
-npm run db:migrate
-```
-
-### 4. 启动开发服务器
-
-```bash
+# 4. 启动
 npm run dev
 ```
 
-### 5. 打开浏览器
-
-访问 [http://localhost:3000](http://localhost:3000)，开始使用。
+打开 [http://localhost:3000](http://localhost:3000) 即可使用。本地开发使用 SQLite 文件数据库，数据保存在 `data/readtree.db`，无需任何外部服务。
 
 ---
 
@@ -110,8 +98,8 @@ npm run dev
 | 前端框架 | Next.js 16 + React 19 |
 | 样式 | Tailwind CSS 4 |
 | 可视化 | React Flow (@xyflow/react) |
-| 数据库 | SQLite + Drizzle ORM |
-| 主题 | next-themes（支持暗色模式） |
+| 数据库 | SQLite (本地) / Turso (云端) + Drizzle ORM |
+| 主题 | 自定义 ThemeProvider（支持暗色模式） |
 | 表单校验 | Zod |
 | 测试 | Vitest |
 
@@ -144,22 +132,80 @@ src/
 
 ---
 
-## 部署
+## 部署到线上
 
-### Vercel（推荐）
+本地开发用 SQLite 没问题，但部署到 Vercel 等 Serverless 平台时，需要用云端数据库。我们选择 [Turso](https://turso.tech)——免费的云端 SQLite，和本地开发完全兼容。
+
+### 第一步：创建 Turso 数据库（免费）
+
+1. 去 [turso.tech](https://turso.tech) 注册账号（GitHub 一键登录）
+2. 点 **Create Database**，名称填 `readtree`，区域选离你最近的
+3. 创建完成后，在数据库详情页找到：
+   - **Database URL**：类似 `libsql://readtree-xxx.turso.io`
+   - **Auth Token**：点 "Generate Token" 获取
+
+### 第二步：初始化云端数据库表结构
+
+在本地终端执行（把下面的 URL 和 Token 替换成你自己的）：
+
+```bash
+node -e "
+const { createClient } = require('@libsql/client');
+const client = createClient({
+  url: '你的 TURSO_DATABASE_URL',
+  authToken: '你的 TURSO_AUTH_TOKEN',
+});
+
+client.executeMultiple(\`
+  CREATE TABLE IF NOT EXISTS books (id TEXT PRIMARY KEY, title TEXT NOT NULL, author TEXT NOT NULL, cover_url TEXT, weread_book_id TEXT NOT NULL UNIQUE, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+  CREATE TABLE IF NOT EXISTS chapters (id TEXT PRIMARY KEY, book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE, chapter_uid INTEGER NOT NULL, title TEXT NOT NULL, level INTEGER NOT NULL, order_index INTEGER NOT NULL, summary TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+  CREATE TABLE IF NOT EXISTS highlights (id TEXT PRIMARY KEY, chapter_id TEXT NOT NULL REFERENCES chapters(id) ON DELETE CASCADE, text TEXT NOT NULL, range TEXT, color_style INTEGER NOT NULL DEFAULT 0, weread_bookmark_id TEXT NOT NULL UNIQUE, created_at TEXT NOT NULL);
+  CREATE TABLE IF NOT EXISTS notes (id TEXT PRIMARY KEY, chapter_id TEXT NOT NULL REFERENCES chapters(id) ON DELETE CASCADE, text TEXT NOT NULL, abstract TEXT, weread_review_id TEXT NOT NULL UNIQUE, created_at TEXT NOT NULL);
+  CREATE TABLE IF NOT EXISTS manual_quotes (id TEXT PRIMARY KEY, chapter_id TEXT NOT NULL REFERENCES chapters(id) ON DELETE CASCADE, text TEXT NOT NULL, created_at TEXT NOT NULL);
+  CREATE TABLE IF NOT EXISTS user_config (id TEXT PRIMARY KEY, weread_cookie TEXT NOT NULL, updated_at TEXT NOT NULL);
+\`).then(() => console.log('✅ 表结构创建成功'));
+"
+```
+
+### 第三步：部署到 Vercel
 
 1. Fork 本项目到你的 GitHub
-2. 在 [Vercel](https://vercel.com) 导入该仓库
-3. 一键部署，完成
+2. 去 [vercel.com](https://vercel.com) → **Add New Project** → 导入你 fork 的仓库
+3. 在部署前，点 **Environment Variables** 添加两个变量：
 
-> **注意：** Vercel 免费版使用无状态文件系统，SQLite 数据每次冷启动后会重置。建议搭配持久化存储使用，或换用 Zeabur 等支持本地持久卷的平台。
+| 变量名 | 值 | 说明 |
+|--------|-----|------|
+| `TURSO_DATABASE_URL` | `libsql://readtree-xxx.turso.io` | Turso 数据库地址 |
+| `TURSO_AUTH_TOKEN` | `eyJhbG...` | Turso 认证令牌 |
 
-### Zeabur
+4. 点 **Deploy**，等待部署完成
+5. 访问 Vercel 分配的域名，开始使用 🎉
 
-1. 在 [Zeabur](https://zeabur.com) 创建新项目
-2. 导入 GitHub 仓库
-3. 挂载持久化存储卷到 `/data` 目录（用于存放 SQLite 数据文件）
+> **为什么需要 Turso？** Vercel 是 Serverless 架构，不支持本地文件系统（SQLite 文件会在每次冷启动后丢失）。Turso 是云端 SQLite，API 兼容、免费额度够用、国内访问速度也不错。
+
+### 部署到 Zeabur（替代方案）
+
+如果你更喜欢 Zeabur：
+
+1. 在 [Zeabur](https://zeabur.com) 创建项目
+2. 添加服务 → Git → 选你的仓库
+3. 同样添加 `TURSO_DATABASE_URL` 和 `TURSO_AUTH_TOKEN` 环境变量
 4. 部署完成
+
+### 部署到自己的服务器（VPS / Docker）
+
+如果你有自己的服务器，可以直接用 SQLite，不需要 Turso：
+
+```bash
+git clone https://github.com/syfssb/readtree.git
+cd readtree
+npm install
+npx drizzle-kit push    # 初始化 SQLite 数据库
+npm run build
+npm start               # 默认端口 3000
+```
+
+数据保存在 `data/readtree.db` 文件中，记得定期备份。
 
 ---
 
