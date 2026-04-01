@@ -62,16 +62,23 @@ function BookFlowInner({ tree, stats, onNodeSelect, selectedChapterId }: BookFlo
     [nodes, selectedChapterId]
   );
 
-  // 节点点击：切换展开/折叠 + 通知父组件选中
+  // 单击节点：展开/折叠子节点（不切换 Tab）
   const handleNodeClick = useCallback(
     (_event: React.MouseEvent, node: Node) => {
       const data = node.data as unknown as ChapterNodeData;
       if (data.hasChildren) {
         toggleExpand(node.id);
       }
+    },
+    [toggleExpand]
+  );
+
+  // 双击节点：选中章节 + 切换到详情 Tab
+  const handleNodeDoubleClick = useCallback(
+    (_event: React.MouseEvent, node: Node) => {
       onNodeSelect?.(node.id);
     },
-    [toggleExpand, onNodeSelect]
+    [onNodeSelect]
   );
 
   // 展开全部后适配视图
@@ -91,6 +98,7 @@ function BookFlowInner({ tree, stats, onNodeSelect, selectedChapterId }: BookFlo
         edges={edges}
         nodeTypes={nodeTypes}
         onNodeClick={handleNodeClick}
+        onNodeDoubleClick={handleNodeDoubleClick}
         connectionLineType={ConnectionLineType.SmoothStep}
         defaultEdgeOptions={{
           type: 'smoothstep',
