@@ -114,8 +114,8 @@ export const ChapterNode = memo(function ChapterNode({ data, selected }: Chapter
 
       {/* 主体内容区 */}
       <div className="flex items-center gap-2 pl-3 pr-2 w-full min-w-0">
-        {/* 章节标题 */}
-        <span className={getTitleClassName(level)}>
+        {/* 章节标题（hover 显示完整文本） */}
+        <span className={getTitleClassName(level)} title={title}>
           {title}
         </span>
 
